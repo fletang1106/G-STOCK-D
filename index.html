@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GESTION DE STOCK DEKA</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f2f5fa;color:#243447;font-family:Arial,sans-serif}
+header{background:linear-gradient(120deg,#07366c,#087bd1);color:white;padding:22px 16px}
+header h1{margin:0;font-size:24px}
+header p{margin-bottom:0}
+main{max-width:1300px;margin:auto;padding:14px}
+.card{background:white;border-radius:12px;padding:16px;margin-bottom:15px;box-shadow:0 2px 9px #102b4610}
+h2{font-size:19px;color:#103d67;margin-top:0}
+nav{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+button{background:#0756a5;color:white;border:0;border-radius:6px;padding:10px 12px;margin:3px;cursor:pointer;font-weight:bold}
+button:hover{opacity:.85}
+.danger{background:#c62828}.secondary{background:#596b7e}.success{background:#16804a}
+input,select,textarea{width:100%;padding:10px;border:1px solid #ccd5df;border-radius:6px;font:inherit}
+label{display:block;font-size:13px;font-weight:bold;margin:10px 0 5px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:12px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.stat{background:#e9f3ff;border-left:4px solid #087bd1;border-radius:8px;padding:15px}
+.stat strong{display:block;color:#0756a5;font-size:25px;margin-top:7px}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:10px;border-bottom:1px solid #e1e8ef;text-align:left;white-space:nowrap}
+th{background:#eaf1f8;color:#173d61}
+.hidden{display:none!important}
+.notice{padding:12px;border-radius:7px;background:#fff3cd;font-size:13px;line-height:1.5;margin-bottom:12px}
+.good{color:#16804a;font-weight:bold}.bad{color:#c62828;font-weight:bold}
+footer{text-align:center;padding:18px;color:#65758a;font-size:12px}
+@media(max-width:500px){main{padding:8px}.card{padding:12px}header h1{font-size:20px}}
+@media print{
+ header,nav,button,.no-print,#login,.screen-only{display:none!important}
+ body{background:white;color:black;font-size:10px}
+ main{max-width:none;padding:0}
+ .card{box-shadow:none;border:0;padding:4px;break-inside:avoid}
+ .page{display:none!important}
+ .page.printing{display:block!important}
+ table{font-size:9px;width:100%}
+ th,td{white-space:normal;padding:5px;border:1px solid #bbb}
+ h2{color:black}
+}
+</style>
+</head>
+<body>
+<header>
+<h1>GESTION DE STOCK DEKA</h1>
+<p>Gestion des marchandises, dépôts et inventaires</p>
+</header>
+
+<main>
+<section id="login" class="card" style="max-width:430px;margin:35px auto">
+<h2>Connexion</h2>
+<div class="notice">Première connexion : identifiant <b>admin</b>, mot de passe <b>DEKA2026</b>.</div>
+<form id="loginForm">
+<label>Identifiant</label><input id="loginName" required autocomplete="username">
+<label>Mot de passe</label><input id="loginPass" type="password" required autocomplete="current-password">
+<button>Se connecter</button>
+<p id="loginError" class="bad"></p>
+</form>
+</section>
+
+<section id="app" class="hidden">
+<div class="card">
+<b>Utilisateur :</b> <span id="who"></span> |
+<b>Rôle :</b> <span id="role"></span><br>
+<button onclick="changePassword()">Changer le mot de passe</button>
+<button class="danger" onclick="logout()">Déconnexion</button>
+</div>
+
+<nav class="no-print">
+<button onclick="page('dashboard')">Tableau de bord</button>
+<button onclick="page('entries')">Entrées</button>
+<button onclick="page('exits')">Sorties</button>
+<button onclick="page('products')">Liste Produits</button>
+<button onclick="page('clients')">Liste Clients</button>
+<button onclick="page('depots')">Dépôts</button>
+<button onclick="page('inventory')">Inventaires</button>
+<button onclick="page('adjustments')">Régularisation</button>
+<button class="adminOnly" onclick="page('history')">Historique</button>
+<button class="adminOnly" onclick="page('reports')">Rapports / PDF</button>
+<button class="adminOnly" onclick="page('users')">Utilisateurs</button>
+</nav>
+
+<!-- TABLEAU DE BORD -->
+<section id="dashboard" class="page">
+<div class="card">
+<h2>Tableau de bord</h2>
+<div class="stats">
+<div class="stat">Produits<strong id="statProducts">0</strong></div>
+<div class="stat">Entrées<strong id="statEntries">0</strong></div>
+<div class="stat">Sorties<strong id="statExits">0</strong></div>
+<div class="stat">Stock disponible<strong id="statStock">0</strong></div>
+<div class="stat">Clients<strong id="statClients">0</strong></div>
+</div>
+</div>
+<div class="card">
+<h2>Stock disponible par produit et dépôt</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Code</th><th>Produit</th><th>Dépôt</th><th>Unité</th><th>Entrées</th><th>Sorties</th><th>Régularisation</th><th>Stock disponible</th></tr></thead>
+<tbody id="stockTable"></tbody>
+</table></div>
+<button onclick="printSection('dashboard')">Exporter en PDF</button>
+</div>
+</section>
+
+<!-- PRODUITS -->
+<section id="products" class="page hidden">
+<div class="card adminOnly">
+<h2>Ajouter / modifier un produit</h2>
+<form id="productForm">
+<input id="productId" type="hidden">
+<div class="grid">
+<div><label>Code produit</label><input id="productCode" required></div>
+<div><label>Nom du produit</label><input id="productName" required></div>
+<div><label>Unité</label><input id="productUnit" value="caisse" required></div>
+<div><label>Dépôt principal</label><select id="productDepot"></select></div>
+</div>
+<button>Enregistrer le produit</button>
+<button type="button" class="secondary" onclick="resetForm('productForm')">Annuler</button>
+</form>
+</div>
+<div class="card">
+<h2>Liste Produits</h2>
+<label>Rechercher un produit</label><input id="productSearch" oninput="renderProducts()" placeholder="Code ou nom...">
+<div class="tablewrap"><table>
+<thead><tr><th>Code</th><th>Produit</th><th>Unité</th><th>Dépôt principal</th><th>Actions</th></tr></thead>
+<tbody id="productsTable"></tbody>
+</table></div>
+<button onclick="printSection('products')">Exporter la liste en PDF</button>
+</div>
+</section>
+
+<!-- CLIENTS -->
+<section id="clients" class="page hidden">
+<div class="card adminOnly">
+<h2>Ajouter / modifier un client</h2>
+<form id="clientForm">
+<input type="hidden" id="clientId">
+<div class="grid">
+<div><label>Nom du client</label><input id="clientName" required></div>
+<div><label>Téléphone</label><input id="clientPhone" type="tel"></div>
+<div><label>Adresse</label><input id="clientAddress"></div>
+<div><label>Observations</label><input id="clientNotes"></div>
+</div>
+<button>Enregistrer le client</button>
+<button type="button" class="secondary" onclick="resetForm('clientForm')">Annuler</button>
+</form>
+</div>
+<div class="card">
+<h2>Liste Clients</h2>
+<label>Rechercher un client</label><input id="clientSearch" oninput="renderClients()" placeholder="Nom, téléphone ou adresse...">
+<div class="tablewrap"><table>
+<thead><tr><th>Nom du client</th><th>Téléphone</th><th>Adresse</th><th>Observations</th><th>Actions</th></tr></thead>
+<tbody id="clientsTable"></tbody>
+</table></div>
+<button onclick="printSection('clients')">Exporter la liste en PDF</button>
+</div>
+</section>
+
+<!-- DEPOTS -->
+<section id="depots" class="page hidden">
+<div class="card adminOnly">
+<h2>Gestion des dépôts</h2>
+<form id="depotForm">
+<input type="hidden" id="depotId">
+<div class="grid">
+<div><label>Nom du dépôt</label><input id="depotName" required></div>
+<div><label>Description</label><input id="depotDesc"></div>
+</div>
+<button>Enregistrer le dépôt</button>
+<button type="button" class="secondary" onclick="resetForm('depotForm')">Annuler</button>
+</form>
+</div>
+<div class="card"><h2>Liste des dépôts</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Dépôt</th><th>Description</th><th>Actions</th></tr></thead>
+<tbody id="depotsTable"></tbody>
+</table></div>
+<button onclick="printSection('depots')">Exporter en PDF</button>
+</div>
+</section>
+
+<!-- ENTREES -->
+<section id="entries" class="page hidden">
+<div class="card">
+<h2>Entrée de marchandises</h2>
+<form id="entryForm">
+<input type="hidden" id="entryId">
+<div class="grid">
+<div><label>Date</label><input type="date" id="entryDate" required></div>
+<div><label>Dépôt</label><select id="entryDepot" required></select></div>
+<div><label>Produit</label><select id="entryProduct" required></select></div>
+<div><label>Quantité reçue</label><input type="number" id="entryQty" min="0.001" step="any" required></div>
+<div><label>Fournisseur</label><input id="entrySupplier"></div>
+<div><label>Référence / facture</label><input id="entryInvoice"></div>
+<div><label>Date d'expiration</label><input type="date" id="entryExpiry"></div>
+<div><label>Observations</label><textarea id="entryNotes"></textarea></div>
+</div>
+<button>Enregistrer l'entrée</button>
+<button type="button" class="secondary" onclick="resetEntry()">Annuler</button>
+</form>
+</div>
+<div class="card"><h2>Liste des entrées</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Date</th><th>Dépôt</th><th>Produit</th><th>Quantité</th><th>Fournisseur</th><th>Facture</th><th>Expiration</th><th>Observations</th><th>Actions</th></tr></thead>
+<tbody id="entriesTable"></tbody>
+</table></div>
+<button onclick="printSection('entries')">Exporter les entrées en PDF</button>
+</div>
+</section>
+
+<!-- SORTIES -->
+<section id="exits" class="page hidden">
+<div class="card">
+<h2>Sortie de marchandises</h2>
+<div class="notice">La sortie de stock est égale à l'avance. La balance = quantité facturée − avance. Exemple : facture 1000, avance 800, balance 200. Aucun montant financier n'est utilisé.</div>
+<form id="exitForm">
+<input type="hidden" id="exitId">
+<div class="grid">
+<div><label>Date</label><input type="date" id="exitDate" required></div>
+<div><label>Dépôt</label><select id="exitDepot" required></select></div>
+<div><label>Produit</label><select id="exitProduct" required></select></div>
+<div><label>Numéro de facture</label><input id="exitInvoice"></div>
+<div><label>Quantité sur la facture</label><input type="number" id="exitInvoiceQty" min="0.001" step="any" required></div>
+<div><label>Avance / quantité sortie</label><input type="number" id="exitAdvance" min="0" step="any" required></div>
+<div><label>Balance automatique</label><input id="exitBalance" readonly></div>
+<div><label>Client</label><select id="exitClient"></select></div>
+<div><label>Chauffeur</label><input id="exitDriver"></div>
+<div><label>Plaque</label><input id="exitPlate"></div>
+<div><label>Numéro du bon de livraison</label><input id="exitDelivery"></div>
+<div><label>Téléphone du chauffeur</label><input type="tel" id="exitPhone"></div>
+<div><label>Observations</label><textarea id="exitNotes"></textarea></div>
+</div>
+<button>Enregistrer la sortie</button>
+<button type="button" class="secondary" onclick="resetExit()">Annuler</button>
+</form>
+</div>
+<div class="card"><h2>Liste des sorties</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Date</th><th>Dépôt</th><th>Produit</th><th>Facture</th><th>Qté facturée</th><th>Avance / sortie</th><th>Balance</th><th>Client</th><th>Chauffeur</th><th>Plaque</th><th>Bon livraison</th><th>Téléphone</th><th>Actions</th></tr></thead>
+<tbody id="exitsTable"></tbody>
+</table></div>
+<button onclick="printSection('exits')">Exporter les sorties en PDF</button>
+</div>
+</section>
+
+<!-- INVENTAIRES -->
+<section id="inventory" class="page hidden">
+<div class="card">
+<h2>Inventaires physiques</h2>
+<div class="notice">Saisis la quantité réellement comptée. Le système la compare au stock théorique au moment du comptage. Un inventaire ne modifie pas automatiquement le stock : utilise Régularisation après vérification.</div>
+<form id="inventoryForm">
+<div class="grid">
+<div><label>Date d'inventaire</label><input type="date" id="invDate" required></div>
+<div><label>Dépôt</label><select id="invDepot" required></select></div>
+<div><label>Produit</label><select id="invProduct" required></select></div>
+<div><label>Stock physique compté</label><input type="number" id="invPhysical" min="0" step="any" required></div>
+<div><label>Observations</label><input id="invNotes"></div>
+</div>
+<button>Enregistrer l'inventaire</button>
+</form>
+</div>
+<div class="card"><h2>Historique des inventaires</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Date</th><th>Dépôt</th><th>Produit</th><th>Stock théorique</th><th>Stock physique</th><th>Écart</th><th>Observations</th><th>Actions</th></tr></thead>
+<tbody id="inventoryTable"></tbody>
+</table></div>
+<button onclick="printSection('inventory')">Exporter les inventaires en PDF</button>
+</div>
+</section>
+
+<!-- REGULARISATIONS -->
+<section id="adjustments" class="page hidden">
+<div class="card">
+<h2>Régularisation du stock</h2>
+<div class="notice">Utilise une quantité positive pour ajouter du stock ou une quantité négative pour en retirer. Chaque correction est conservée dans l'historique.</div>
+<form id="adjustForm">
+<div class="grid">
+<div><label>Date</label><input type="date" id="adjDate" required></div>
+<div><label>Dépôt</label><select id="adjDepot" required></select></div>
+<div><label>Produit</label><select id="adjProduct" required></select></div>
+<div><label>Correction de quantité (+ ou −)</label><input type="number" id="adjQty" step="any" required placeholder="Ex. 10 ou -5"></div>
+<div><label>Motif de régularisation</label><select id="adjReason" required><option value="">Choisir un motif</option><option>Écart d'inventaire</option><option>Casse / détérioration</option><option>Perte</option><option>Erreur de saisie</option><option>Correction de stock</option><option>Autre</option></select></div>
+<div><label>Observations</label><input id="adjNotes"></div>
+</div>
+<button>Enregistrer la régularisation</button>
+</form>
+</div>
+<div class="card"><h2>Historique des régularisations</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Date</th><th>Dépôt</th><th>Produit</th><th>Correction</th><th>Motif</th><th>Observations</th><th>Actions</th></tr></thead>
+<tbody id="adjustTable"></tbody>
+</table></div>
+<button onclick="printSection('adjustments')">Exporter les régularisations en PDF</button>
+</div>
+</section>
+
+<!-- HISTORIQUE ADMIN -->
+<section id="history" class="page hidden">
+<div class="card">
+<h2>Historique complet</h2>
+<label>Recherche</label><input id="historySearch" oninput="renderHistory()" placeholder="Produit, dépôt, facture, client...">
+<div class="tablewrap"><table>
+<thead><tr><th>Type</th><th>Date</th><th>Dépôt</th><th>Produit</th><th>Quantité</th><th>Balance</th><th>Tiers / Motif</th><th>Référence / Notes</th></tr></thead>
+<tbody id="historyTable"></tbody>
+</table></div>
+<button onclick="printSection('history')">Exporter l'historique en PDF</button>
+</div>
+</section>
+
+<!-- RAPPORTS -->
+<section id="reports" class="page hidden">
+<div class="card">
+<h2>Rapports et export PDF</h2>
+<p>Choisis un rapport, puis appuie sur son bouton PDF. Dans la fenêtre d'impression, sélectionne « Enregistrer au format PDF ».</p>
+<button onclick="printSection('dashboard')">PDF — Tableau de bord et stock</button>
+<button onclick="printSection('products')">PDF — Liste des produits</button>
+<button onclick="printSection('clients')">PDF — Liste des clients</button>
+<button onclick="printSection('entries')">PDF — Entrées</button>
+<button onclick="printSection('exits')">PDF — Sorties et balances</button>
+<button onclick="printSection('inventory')">PDF — Inventaires</button>
+<button onclick="printSection('adjustments')">PDF — Régularisations</button>
+<button onclick="printSection('history')">PDF — Historique complet</button>
+<button onclick="exportCSV()">Exporter l'historique CSV</button>
+</div>
+</section>
+
+<!-- UTILISATEURS ADMIN -->
+<section id="users" class="page hidden">
+<div class="card">
+<h2>Comptes utilisateurs</h2>
+<form id="userForm">
+<input type="hidden" id="userId">
+<div class="grid">
+<div><label>Nom complet</label><input id="userFullName" required></div>
+<div><label>Identifiant</label><input id="userLogin" required></div>
+<div><label>Mot de passe</label><input id="userPassword" type="password" autocomplete="new-password" placeholder="8 caractères minimum"></div>
+<div><label>Rôle</label><select id="userRole"><option value="employe">Employé</option><option value="admin">Administrateur</option></select></div>
+</div>
+<button>Enregistrer le compte</button>
+<button type="button" class="secondary" onclick="resetForm('userForm')">Annuler</button>
+</form>
+</div>
+<div class="card"><h2>Liste des comptes</h2>
+<div class="tablewrap"><table><thead><tr><th>Nom</th><th>Identifiant</th><th>Rôle</th><th>Actions</th></tr></thead><tbody id="usersTable"></tbody></table></div>
+</div>
+</section>
+</section>
+</main>
+<footer>GESTION DE STOCK DEKA</footer>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const today=()=>new Date().toISOString().slice(0,10);
+const n=x=>Number(x)||0;
+const f=x=>Number(x||0).toLocaleString("fr-FR",{maximumFractionDigits:3});
+const esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const defaults={users:[{id:"admin0",name:"Administrateur",login:"admin",password:"DEKA2026",role:"admin"}],depots:[{id:"d0",name:"Dépôt principal",description:""}],products:[],clients:[],entries:[],exits:[],inventories:[],adjustments:[]};
+let db,me=null;
+function load(){
+ try{db=JSON.parse(localStorage.getItem("deka_stock_db"))||JSON.parse(JSON.stringify(defaults))}
+ catch(e){db=JSON.parse(JSON.stringify(defaults))}
+ for(const k in defaults)if(!Array.isArray(db[k]))db[k]=[];
+ if(!db.users.some(u=>u.role==="admin"))db.users.push({...defaults.users[0]});
+}
+function save(){localStorage.setItem("deka_stock_db",JSON.stringify(db));renderAll()}
+function admin(){return !!me&&me.role==="admin"}
+function nameDepot(id){return db.depots.find(x=>x.id===id)?.name||"Dépôt supprimé"}
+function nameProduct(id){return db.products.find(x=>x.id===id)?.name||"Produit supprimé"}
+function nameClient(id){return db.clients.find(x=>x.id===id)?.name||""}
+function stock(pid,did,skipExit="",skipAdj=""){
+ const en=db.entries.filter(x=>x.product===pid&&x.depot===did).reduce((s,x)=>s+n(x.qty),0);
+ const out=db.exits.filter(x=>x.product===pid&&x.depot===did&&x.id!==skipExit).reduce((s,x)=>s+n(x.advance),0);
+ const adj=db.adjustments.filter(x=>x.product===pid&&x.depot===did&&x.id!==skipAdj).reduce((s,x)=>s+n(x.qty),0);
+ return en-out+adj;
+}
+function page(id){
+ if(["history","reports","users"].includes(id)&&!admin())return alert("Accès réservé à l'administrateur.");
+ document.querySelectorAll(".page").forEach(x=>x.classList.add("hidden"));
+ $(id).classList.remove("hidden");
+}
+$("loginForm").onsubmit=e=>{
+ e.preventDefault();load();
+ const u=db.users.find(x=>x.login===$("loginName").value.trim()&&x.password===$("loginPass").value);
+ if(!u){$("loginError").textContent="Identifiant ou mot de passe incorrect.";return}
+ me=u;$("login").classList.add("hidden");$("app").classList.remove("hidden");
+ $("who").textContent=u.name;$("role").textContent=u.role==="admin"?"Administrateur":"Employé";
+ document.querySelectorAll(".adminOnly").forEach(x=>x.classList.toggle("hidden",!admin()));
+ renderAll();page("dashboard");
+};
+function logout(){me=null;$("app").classList.add("hidden");$("login").classList.remove("hidden");$("loginPass").value=""}
+function changePassword(){
+ const old=prompt("Mot de passe actuel");if(old===null)return;
+ if(old!==me.password)return alert("Mot de passe incorrect.");
+ const p=prompt("Nouveau mot de passe, 8 caractères minimum");if(p===null)return;
+ if(p.length<8)return alert("Mot de passe trop court.");
+ me.password=p;db.users=db.users.map(x=>x.id===me.id?me:x);save();alert("Mot de passe modifié sur cet appareil.");
+}
+function resetForm(id){$(id).reset();const h=$(id).querySelector('input[type="hidden"]');if(h)h.value=""}
+function fillSelect(id,items,placeholder,selected){
+ const el=$(id),old=selected!==undefined?selected:el.value;
+ el.innerHTML='<option value="">'+esc(placeholder)+'</option>'+items.map(x=>`<option value="${esc(x.id)}">${esc(x.label||x.name)}</option>`).join("");
+ if(items.some(x=>x.id===old))el.value=old;
+}
+function refreshSelects(){
+ fillSelect("productDepot",db.depots,"Choisir un dépôt");
+ fillSelect("entryDepot",db.depots,"Choisir un dépôt");
+ fillSelect("exitDepot",db.depots,"Choisir un dépôt");
+ fillSelect("invDepot",db.depots,"Choisir un dépôt");
+ fillSelect("adjDepot",db.depots,"Choisir un dépôt");
+ const ps=db.products.map(p=>({id:p.id,label:p.code+" — "+p.name}));
+ ["entryProduct","exitProduct","invProduct","adjProduct"].forEach(id=>fillSelect(id,ps,"Choisir un produit"));
+ fillSelect("exitClient",db.clients,"Choisir un client (facultatif)");
+}
+function renderAll(){
+ refreshSelects();renderProducts();renderClients();renderDepots();renderEntries();renderExits();renderInventory();renderAdjustments();renderUsers();renderDashboard();renderHistory();
+}
+function renderProducts(){
+ const q=($("productSearch")?.value||"").toLowerCase();
+ $("productsTable").innerHTML=db.products.filter(p=>(p.name+" "+p.code).toLowerCase().includes(q)).map(p=>`<tr><td>${esc(p.code)}</td><td>${esc(p.name)}</td><td>${esc(p.unit)}</td><td>${esc(nameDepot(p.depot))}</td><td>${admin()?`<button onclick="editProduct('${p.id}')">Modifier</button><button class="danger" onclick="delProduct('${p.id}')">Supprimer</button>`:"Consultation"}</td></tr>`).join("")||'<tr><td colspan="5">Aucun produit.</td></tr>';
+}
+$("productForm").onsubmit=e=>{
+ e.preventDefault();if(!admin())return alert("Action réservée à l'administrateur.");
+ const id=$("productId").value,code=$("productCode").value.trim();
+ if(db.products.some(p=>p.code.toLowerCase()===code.toLowerCase()&&p.id!==id))return alert("Code produit déjà utilisé.");
+ const p={id:id||uid(),code,name:$("productName").value.trim(),unit:$("productUnit").value.trim(),depot:$("productDepot").value};
+ if(id)db.products=db.products.map(x=>x.id===id?p:x);else db.products.push(p);
+ resetForm("productForm");save();
+};
+function editProduct(id){if(!admin())return;const p=db.products.find(x=>x.id===id);if(!p)return;
+ $("productId").value=p.id;$("productCode").value=p.code;$("productName").value=p.name;$("productUnit").value=p.unit;$("productDepot").value=p.depot;page("products")}
+function delProduct(id){if(!admin())return;if(db.entries.some(x=>x.product===id)||db.exits.some(x=>x.product===id)||db.adjustments.some(x=>x.product===id))return alert("Ce produit a un historique et ne peut pas être supprimé.");if(confirm("Supprimer ce produit ?")){db.products=db.products.filter(x=>x.id!==id);save()}}
+function renderClients(){
+ const q=($("clientSearch")?.value||"").toLowerCase();
+ $("clientsTable").innerHTML=db.clients.filter(c=>(c.name+" "+c.phone+" "+c.address).toLowerCase().includes(q)).map(c=>`<tr><td>${esc(c.name)}</td><td>${esc(c.phone)}</td><td>${esc(c.address)}</td><td>${esc(c.notes)}</td><td>${admin()?`<button onclick="editClient('${c.id}')">Modifier</button><button class="danger" onclick="delClient('${c.id}')">Supprimer</button>`:"Consultation"}</td></tr>`).join("")||'<tr><td colspan="5">Aucun client.</td></tr>';
+}
+$("clientForm").onsubmit=e=>{
+ e.preventDefault();if(!admin())return alert("Action réservée à l'administrateur.");
+ const id=$("clientId").value,c={id:id||uid(),name:$("clientName").value.trim(),phone:$("clientPhone").value.trim(),address:$("clientAddress").value.trim(),notes:$("clientNotes").value.trim()};
+ if(id)db.clients=db.clients.map(x=>x.id===id?c:x);else db.clients.push(c);
+ resetForm("clientForm");save();
+};
+function editClient(id){if(!admin())return;const c=db.clients.find(x=>x.id===id);if(!c)return;
+ $("clientId").value=c.id;$("clientName").value=c.name;$("clientPhone").value=c.phone;$("clientAddress").value=c.address;$("clientNotes").value=c.notes;page("clients")}
+function delClient(id){if(!admin())return;if(confirm("Supprimer ce client de la liste ? Les sorties déjà enregistrées sont conservées.")){db.clients=db.clients.filter(x=>x.id!==id);save()}}
+function renderDepots(){
+ $("depotsTable").innerHTML=db.depots.map(d=>`<tr><td>${esc(d.name)}</td><td>${esc(d.description)}</td><td>${admin()?`<button onclick="editDepot('${d.id}')">Modifier</button><button class="danger" onclick="delDepot('${d.id}')">Supprimer</button>`:"Consultation"}</td></tr>`).join("")||'<tr><td colspan="3">Aucun dépôt.</td></tr>';
+}
+$("depotForm").onsubmit=e=>{
+ e.preventDefault();if(!admin())return alert("Action réservée à l'administrateur.");
+ const id=$("depotId").value,name=$("depotName").value.trim();
+ if(db.depots.some(x=>x.name.toLowerCase()===name.toLowerCase()&&x.id!==id))return alert("Ce dépôt existe déjà.");
+ const d={id:id||uid(),name,description:$("depotDesc").value.trim()};
+ if(id)db.depots=db.depots.map(x=>x.id===id?d:x);else db.depots.push(d);
+ resetForm("depotForm");save();
+};
+function editDepot(id){if(!admin())return;const d=db.depots.find(x=>x.id===id);if(!d)return;$("depotId").value=d.id;$("depotName").value=d.name;$("depotDesc").value=d.description;page("depots")}
+function delDepot(id){if(!admin())return;if(db.depots.length<=1)return alert("Conservez au moins un dépôt.");if(db.products.some(x=>x.depot===id)||db.entries.some(x=>x.depot===id)||db.exits.some(x=>x.depot===id)||db.adjustments.some(x=>x.depot===id))return alert("Ce dépôt possède des données. Il ne peut pas être supprimé.");if(confirm("Supprimer ce dépôt ?")){db.depots=db.depots.filter(x=>x.id!==id);save()}}
+function resetEntry(){resetForm("entryForm");$("entryDate").value=today()}
+function renderEntries(){
+ $("entriesTable").innerHTML=db.entries.slice().reverse().map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(nameDepot(x.depot))}</td><td>${esc(nameProduct(x.product))}</td><td>${f(x.qty)}</td><td>${esc(x.supplier)}</td><td>${esc(x.invoice)}</td><td>${esc(x.expiry)}</td><td>${esc(x.notes)}</td><td>${admin()?`<button onclick="editEntry('${x.id}')">Modifier</button><button class="danger" onclick="delEntry('${x.id}')">Supprimer</button>`:"—"}</td></tr>`).join("")||'<tr><td colspan="9">Aucune entrée.</td></tr>';
+}
+$("entryForm").onsubmit=e=>{
+ e.preventDefault();const id=$("entryId").value;if(id&&!admin())return alert("Modification réservée à l'administrateur.");
+ const x={id:id||uid(),date:$("entryDate").value,depot:$("entryDepot").value,product:$("entryProduct").value,qty:n($("entryQty").value),supplier:$("entrySupplier").value.trim(),invoice:$("entryInvoice").value.trim(),expiry:$("entryExpiry").value,notes:$("entryNotes").value.trim()};
+ if(!x.depot||!x.product||x.qty<=0)return alert("Vérifiez les champs.");
+ if(id&&stock(x.product,x.depot,"","")-n(db.entries.find(a=>a.id===id)?.qty)+x.qty<0)return alert("Stock insuffisant pour cette modification.");
+ if(id)db.entries=db.entries.map(a=>a.id===id?x:a);else db.entries.push(x);
+ resetEntry();save();
+};
+function editEntry(id){if(!admin())return;const x=db.entries.find(a=>a.id===id);if(!x)return;
+ for(const [k,v] of Object.entries({entryId:x.id,entryDate:x.date,entryDepot:x.depot,entryProduct:x.product,entryQty:x.qty,entrySupplier:x.supplier,entryInvoice:x.invoice,entryExpiry:x.expiry,entryNotes:x.notes}))$(k).value=v;page("entries")}
+function delEntry(id){if(!admin())return;const x=db.entries.find(a=>a.id===id);if(!x)return;if(stock(x.product,x.depot)-x.qty<0)return alert("Impossible de supprimer : cela créerait un stock négatif.");if(confirm("Supprimer cette entrée ?")){db.entries=db.entries.filter(a=>a.id!==id);save()}}
+function resetExit(){resetForm("exitForm");$("exitDate").value=today();$("exitBalance").value=""}
+function updateBalance(){$("exitBalance").value=f(n($("exitInvoiceQty").value)-n($("exitAdvance").value))}
+$("exitInvoiceQty").oninput=updateBalance;$("exitAdvance").oninput=updateBalance;
+function renderExits(){
+ $("exitsTable").innerHTML=db.exits.slice().reverse().map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(nameDepot(x.depot))}</td><td>${esc(nameProduct(x.product))}</td><td>${esc(x.invoice)}</td><td>${f(x.invoiceQty)}</td><td>${f(x.advance)}</td><td>${f(x.balance)}</td><td>${esc(x.clientName||nameClient(x.client))}</td><td>${esc(x.driver)}</td><td>${esc(x.plate)}</td><td>${esc(x.delivery)}</td><td>${esc(x.phone)}</td><td>${admin()?`<button onclick="editExit('${x.id}')">Modifier</button><button class="danger" onclick="delExit('${x.id}')">Supprimer</button>`:"—"}</td></tr>`).join("")||'<tr><td colspan="13">Aucune sortie.</td></tr>';
+}
+$("exitForm").onsubmit=e=>{
+ e.preventDefault();const id=$("exitId").value;if(id&&!admin())return alert("Modification réservée à l'administrateur.");
+ const q=n($("exitInvoiceQty").value),a=n($("exitAdvance").value);
+ const x={id:id||uid(),date:$("exitDate").value,depot:$("exitDepot").value,product:$("exitProduct").value,invoice:$("exitInvoice").value.trim(),invoiceQty:q,advance:a,balance:q-a,client:$("exitClient").value,clientName:nameClient($("exitClient").value)||$("exitClient").selectedOptions[0]?.text||"",driver:$("exitDriver").value.trim(),plate:$("exitPlate").value.trim(),delivery:$("exitDelivery").value.trim(),phone:$("exitPhone").value.trim(),notes:$("exitNotes").value.trim()};
+ if(!x.depot||!x.product||q<=0||a<0||a>q)return alert("L'avance doit être entre zéro et la quantité facturée.");
+ if(a>stock(x.product,x.depot,id||""))return alert("Stock insuffisant. Stock disponible : "+f(stock(x.product,x.depot,id||"")));
+ if(id)db.exits=db.exits.map(z=>z.id===id?x:z);else db.exits.push(x);
+ resetExit();save();
+};
+function editExit(id){if(!admin())return;const x=db.exits.find(a=>a.id===id);if(!x)return;
+ const map={exitId:"id",exitDate:"date",exitDepot:"depot",exitProduct:"product",exitInvoice:"invoice",exitInvoiceQty:"invoiceQty",exitAdvance:"advance",exitBalance:"balance",exitClient:"client",exitDriver:"driver",exitPlate:"plate",exitDelivery:"delivery",exitPhone:"phone",exitNotes:"notes"};
+ Object.entries(map).forEach(([field,k])=>$(field).value=x[k]??"");page("exits")}
+function delExit(id){if(!admin())return;if(confirm("Supprimer cette sortie ?")){db.exits=db.exits.filter(x=>x.id!==id);save()}}
+function renderInventory(){
+ $("inventoryTable").innerHTML=db.inventories.slice().reverse().map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(nameDepot(x.depot))}</td><td>${esc(nameProduct(x.product))}</td><td>${f(x.theoretical)}</td><td>${f(x.physical)}</td><td class="${x.diff<0?'bad':x.diff>0?'good':''}">${f(x.diff)}</td><td>${esc(x.notes)}</td><td>${admin()?`<button class="danger" onclick="delInventory('${x.id}')">Supprimer</button>`:"—"}</td></tr>`).join("")||'<tr><td colspan="8">Aucun inventaire.</td></tr>';
+}
+$("inventoryForm").onsubmit=e=>{
+ e.preventDefault();const depot=$("invDepot").value,product=$("invProduct").value,physical=n($("invPhysical").value);
+ if(!depot||!product||physical<0)return alert("Vérifiez les données.");
+ const theoretical=stock(product,depot);
+ db.inventories.push({id:uid(),date:$("invDate").value,depot,product,theoretical,physical,diff:physical-theoretical,notes:$("invNotes").value.trim()});
+ resetForm("inventoryForm");$("invDate").value=today();save();
+};
+function delInventory(id){if(!admin())return;if(confirm("Supprimer cet enregistrement d'inventaire ?")){db.inventories=db.inventories.filter(x=>x.id!==id);save()}}
+function renderAdjustments(){
+ $("adjustTable").innerHTML=db.adjustments.slice().reverse().map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(nameDepot(x.depot))}</td><td>${esc(nameProduct(x.product))}</td><td class="${x.qty<0?'bad':'good'}">${f(x.qty)}</td><td>${esc(x.reason)}</td><td>${esc(x.notes)}</td><td>${admin()?`<button class="danger" onclick="delAdjust('${x.id}')">Supprimer</button>`:"—"}</td></tr>`).join("")||'<tr><td colspan="7">Aucune régularisation.</td></tr>';
+}
+$("adjustForm").onsubmit=e=>{
+ e.preventDefault();if(!admin())return alert("Seul l'administrateur peut régulariser le stock.");
+ const x={id:uid(),date:$("adjDate").value,depot:$("adjDepot").value,product:$("adjProduct").value,qty:Number($("adjQty").value),reason:$("adjReason").value,notes:$("adjNotes").value.trim()};
+ if(!x.depot||!x.product||!Number.isFinite(x.qty)||x.qty===0||!x.reason)return alert("Remplissez tous les champs et saisissez une correction non nulle.");
+ if(stock(x.product,x.depot)+x.qty<0)return alert("Cette correction créerait un stock négatif.");
+ db.adjustments.push(x);resetForm("adjustForm");$("adjDate").value=today();save();
+};
+function delAdjust(id){if(!admin())return;const x=db.adjustments.find(a=>a.id===id);if(!x)return;if(stock(x.product,x.depot)-x.qty<0)return alert("Impossible : cette suppression créerait un stock négatif.");if(confirm("Supprimer cette régularisation ?")){db.adjustments=db.adjustments.filter(a=>a.id!==id);save()}}
+function renderDashboard(){
+ $("statProducts").textContent=db.products.length;$("statEntries").textContent=db.entries.length;$("statExits").textContent=db.exits.length;$("statClients").textContent=db.clients.length;
+ $("statStock").textContent=f(db.products.reduce((s,p)=>s+db.depots.reduce((t,d)=>t+stock(p.id,d.id),0),0));
+ const rows=[];
+ db.products.forEach(p=>db.depots.forEach(d=>{
+  const en=db.entries.filter(x=>x.product===p.id&&x.depot===d.id).reduce((s,x)=>s+n(x.qty),0);
+  const out=db.exits.filter(x=>x.product===p.id&&x.depot===d.id).reduce((s,x)=>s+n(x.advance),0);
+  const adj=db.adjustments.filter(x=>x.product===p.id&&x.depot===d.id).reduce((s,x)=>s+n(x.qty),0);
+  if(en||out||adj||p.depot===d.id)rows.push(`<tr><td>${esc(p.code)}</td><td>${esc(p.name)}</td><td>${esc(d.name)}</td><td>${esc(p.unit)}</td><td>${f(en)}</td><td>${f(out)}</td><td>${f(adj)}</td><td class="${stock(p.id,d.id)<0?'bad':'good'}">${f(stock(p.id,d.id))}</td></tr>`);
+ }));
+ $("stockTable").innerHTML=rows.join("")||'<tr><td colspan="8">Ajoutez des produits et des mouvements.</td></tr>';
+}
+function historyRows(){
+ return [
+ ...db.entries.map(x=>({type:"Entrée",date:x.date,depot:x.depot,product:x.product,qty:x.qty,balance:"",third:x.supplier,ref:x.invoice,notes:x.notes})),
+ ...db.exits.map(x=>({type:"Sortie",date:x.date,depot:x.depot,product:x.product,qty:x.advance,balance:x.balance,third:x.clientName||nameClient(x.client)||"",ref:x.invoice,notes:x.notes})),
+ ...db.adjustments.map(x=>({type:"Régularisation",date:x.date,depot:x.depot,product:x.product,qty:x.qty,balance:"",third:x.reason,ref:"",notes:x.notes})),
+ ...db.inventories.map(x=>({type:"Inventaire",date:x.date,depot:x.depot,product:x.product,qty:x.physical,balance:"Écart : "+f(x.diff),third:"Stock théorique : "+f(x.theoretical),ref:"",notes:x.notes}))
+ ].sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+}
+function renderHistory(){
+ if(!admin())return;
+ const q=($("historySearch")?.value||"").toLowerCase();
+ $("historyTable").innerHTML=historyRows().filter(x=>[x.type,x.date,nameDepot(x.depot),nameProduct(x.product),x.third,x.ref,x.notes].join(" ").toLowerCase().includes(q)).map(x=>`<tr><td>${esc(x.type)}</td><td>${esc(x.date)}</td><td>${esc(nameDepot(x.depot))}</td><td>${esc(nameProduct(x.product))}</td><td>${f(x.qty)}</td><td>${esc(x.balance)}</td><td>${esc(x.third)}</td><td>${esc(x.ref)} ${esc(x.notes)}</td></tr>`).join("")||'<tr><td colspan="8">Aucun résultat.</td></tr>';
+}
+$("userForm").onsubmit=e=>{
+ e.preventDefault();if(!admin())return alert("Action réservée à l'administrateur.");
+ const id=$("userId").value,login=$("userLogin").value.trim(),password=$("userPassword").value,old=db.users.find(x=>x.id===id);
+ if(db.users.some(x=>x.login.toLowerCase()===login.toLowerCase()&&x.id!==id))return alert("Cet identifiant existe déjà.");
+ if(!id&&password.length<8)return alert("Mot de passe de 8 caractères minimum.");
+ if(id&&password&&password.length<8)return alert("Mot de passe de 8 caractères minimum.");
+ const u={id:id||uid(),name:$("userFullName").value.trim(),login,role:$("userRole").value,password:password||(old&&old.password)};
+ if(id===me.id&&u.role!=="admin"&&db.users.filter(x=>x.role==="admin").length===1)return alert("Il faut conserver un administrateur.");
+ if(id)db.users=db.users.map(x=>x.id===id?u:x);else db.users.push(u);
+ if(id===me.id){me=u;$("who").textContent=u.name;$("role").textContent=u.role==="admin"?"Administrateur":"Employé"}
+ resetForm("userForm");save();
+};
+function renderUsers(){
+ if(!admin())return;
+ $("usersTable").innerHTML=db.users.map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.login)}</td><td>${u.role==="admin"?"Administrateur":"Employé"}</td><td><button onclick="editUser('${u.id}')">Modifier</button>${u.id!==me.id?`<button class="danger" onclick="delUser('${u.id}')">Supprimer</button>`:""}</td></tr>`).join("");
+}
+function editUser(id){if(!admin())return;const u=db.users.find(x=>x.id===id);if(!u)return;$("userId").value=u.id;$("userFullName").value=u.name;$("userLogin").value=u.login;$("userPassword").value="";$("userRole").value=u.role;page("users")}
+function delUser(id){if(!admin())return;const u=db.users.find(x=>x.id===id);if(!u)return;if(u.role==="admin"&&db.users.filter(x=>x.role==="admin").length<=1)return alert("Conservez un administrateur.");if(confirm("Supprimer ce compte ?")){db.users=db.users.filter(x=>x.id!==id);save()}}
+function printSection(id){
+ if(["history","reports","users"].includes(id)&&!admin())return alert("Accès réservé à l'administrateur.");
+ document.querySelectorAll(".page").forEach(x=>{x.classList.add("hidden");x.classList.remove("printing")});
+ const el=$(id);el.classList.remove("hidden");el.classList.add("printing");
+ window.print();
+ el.classList.remove("printing");el.classList.add("hidden");
+ const active=lastPage||"dashboard";$(active).classList.remove("hidden");
+}
+let lastPage="dashboard";
+const originalPage=page;
+page=function(id){lastPage=id;originalPage(id)};
+function exportCSV(){
+ if(!admin())return alert("Accès réservé à l'administrateur.");
+ const rows=[["Type","Date","Dépôt","Produit","Quantité","Balance","Tiers","Référence","Observations"]];
+ historyRows().forEach(x=>rows.push([x.type,x.date,nameDepot(x.depot),nameProduct(x.product),x.qty,x.balance,x.third,x.ref,x.notes]));
+ const csv="\uFEFF"+rows.map(r=>r.map(v=>'"'+String(v??"").replace(/"/g,'""')+'"').join(";")).join("\r\n");
+ const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
+ const a=document.createElement("a");a.href=url;a.download="DEKA-historique.csv";a.click();URL.revokeObjectURL(url);
+}
+load();
+$("entryDate").value=today();$("exitDate").value=today();$("invDate").value=today();$("adjDate").value=today();
+</script>
+</body>
+</html>
