@@ -597,13 +597,66 @@ function resetEntry(){resetForm("entryForm");$("entryDate").value=today()}
 function renderEntries(){
  $("entriesTable").innerHTML=db.entries.slice().reverse().map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(nameDepot(x.depot))}</td><td>${esc(nameProduct(x.product))}</td><td>${f(x.qty)}</td><td>${esc(x.supplier)}</td><td>${esc(x.invoice)}</td><td>${esc(x.expiry)}</td><td>${esc(x.notes)}</td><td>${admin()?`<button onclick="editEntry('${x.id}')">Modifier</button><button class="danger" onclick="delEntry('${x.id}')">Supprimer</button>`:"—"}</td></tr>`).join("")||'<tr><td colspan="9">Aucune entrée.</td></tr>';
 }
-$("entryForm").onsubmit=e=>{
- e.preventDefault();const id=$("entryId").value;if(id&&!admin())return alert("Modification réservée à l'administrateur.");
- const x={id:id||uid(),date:$("entryDate").value,depot:$("entryDepot").value,product:$("entryProduct").value,qty:n($("entryQty").value),supplier:$("entrySupplier").value.trim(),invoice:$("entryInvoice").value.trim(),expiry:$("entryExpiry").value,notes:$("entryNotes").value.trim()};
- if(!x.depot||!x.product||x.qty<=0)return alert("Vérifiez les champs.");
- if(id&&stock(x.product,x.depot,"","")-n(db.entries.find(a=>a.id===id)?.qty)+x.qty<0)return alert("Stock insuffisant pour cette modification.");
- if(id)db.entries=db.entries.map(a=>a.id===id?x:a);else db.entries.push(x);
- resetEntry();save();
+$("entryForm").onsubmit = async e => {
+  e.preventDefault();
+
+  const id = $("entryId").value;
+
+  if (id) {
+    return alert(
+      "La modification des entrées sera disponible après la mise à jour de l'API."
+    );
+  }
+
+  const x = {
+    date: $("entryDate").value,
+    depot: $("entryDepot").value,
+    product: $("entryProduct").value,
+    qty: n($("entryQty").value),
+    supplier: $("entrySupplier").value.trim(),
+    invoice: $("entryInvoice").value.trim(),
+    expiry: $("entryExpiry").value,
+    notes: $("entryNotes").value.trim()
+  };
+
+  if (!x.date || !x.depot || !x.product || x.qty <= 0) {
+    return alert("Vérifiez les champs.");
+  }
+
+  try {
+    const response = await fetch("/api/entrees", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        date_entree: x.date,
+        produit_id: Number(x.product),
+        reference_document: x.invoice,
+        depot: x.depot,
+        quantite: x.qty,
+        fournisseur: x.supplier,
+        date_expiration: x.expiry || null,
+        observations: x.notes
+      })
+    });
+
+    const resultat = await response.json();
+
+    if (!response.ok) {
+      throw new Error(resultat.error || "Erreur d'enregistrement.");
+    }
+
+    await loadEntriesFromNeon();
+
+    resetEntry();
+    alert("Entrée enregistrée avec succès dans Neon !");
+
+  } catch (error) {
+    console.error(error);
+    alert(error.message || "Impossible d'enregistrer l'entrée.");
+  }
+};
 };
 function editEntry(id){if(!admin())return;const x=db.entries.find(a=>a.id===id);if(!x)return;
  for(const [k,v] of Object.entries({entryId:x.id,entryDate:x.date,entryDepot:x.depot,entryProduct:x.product,entryQty:x.qty,entrySupplier:x.supplier,entryInvoice:x.invoice,entryExpiry:x.expiry,entryNotes:x.notes}))$(k).value=v;page("entries")}
