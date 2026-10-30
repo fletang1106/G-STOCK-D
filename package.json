@@ -1,8 +1,11 @@
 {
-  "name": "g-stock-n",
+  "name": "gestion-stock-deka",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
+  "scripts": { "dev": "vercel dev" },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2"
-  }
+  },
+  "devDependencies": { "vercel": "^41.6.0" }
 }
