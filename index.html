@@ -364,11 +364,26 @@ const esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const defaults={users:[{id:"admin0",name:"Administrateur",login:"admin",password:"DEKA2026",role:"admin"}],depots:[{id:"d0",name:"Dépôt principal",description:""}],products:[],clients:[],entries:[],exits:[],inventories:[],adjustments:[]};
 let db,me=null;
 function load(){
- try{db=JSON.parse(localStorage.getItem("deka_stock_db"))||JSON.parse(JSON.stringify(defaults))}
- catch(e){db=JSON.parse(JSON.stringify(defaults))}
- for(const k in defaults)if(!Array.isArray(db[k]))db[k]=[];
- if(!db.users.some(u=>u.role==="admin"))db.users.push({...defaults.users[0]});
-}
+  try {
+    db = JSON.parse(localStorage.getItem("deka_stock_db")) ||
+         JSON.parse(JSON.stringify(defaults));
+  } catch(e) {
+    db = JSON.parse(JSON.stringify(defaults));
+  }
+
+  for (const k in defaults) {
+    if (!Array.isArray(db[k])) db[k] = [];
+  }
+
+  let adminUser = db.users.find(u => u.role === "admin");
+
+  if (!adminUser) {
+    db.users.push({...defaults.users[0]});
+  } else {
+    adminUser.login = "admin";
+    adminUser.password = "DEKA2026";
+    adminUser.name = "Administrateur";
+  }
 function save(){localStorage.setItem("deka_stock_db",JSON.stringify(db));renderAll()}
 function admin(){return !!me&&me.role==="admin"}
 function nameDepot(id){return db.depots.find(x=>x.id===id)?.name||"Dépôt supprimé"}
