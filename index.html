@@ -385,14 +385,39 @@ function page(id){
  document.querySelectorAll(".page").forEach(x=>x.classList.add("hidden"));
  $(id).classList.remove("hidden");
 }
-$("loginForm").onsubmit=e=>{
- e.preventDefault();load();
- const u=db.users.find(x=>x.login===$("loginName").value.trim()&&x.password===$("loginPass").value);
- if(!u){$("loginError").textContent="Identifiant ou mot de passe incorrect.";return}
- me=u;$("login").classList.add("hidden");$("app").classList.remove("hidden");
- $("who").textContent=u.name;$("role").textContent=u.role==="admin"?"Administrateur":"Employé";
- document.querySelectorAll(".adminOnly").forEach(x=>x.classList.toggle("hidden",!admin()));
- renderAll();page("dashboard");
+$("loginForm").onsubmit = async e => {
+  e.preventDefault();
+  load();
+
+  const login = $("loginName").value.trim();
+  const password = $("loginPass").value;
+
+  const u = db.users.find(
+    x => x.login === login && x.password === password
+  );
+
+  if (!u) {
+    $("loginError").textContent =
+      "Identifiant ou mot de passe incorrect.";
+    return;
+  }
+
+  me = u;
+  $("login").classList.add("hidden");
+  $("app").classList.remove("hidden");
+
+  $("who").textContent = u.name;
+  $("role").textContent =
+    u.role === "admin" ? "Administrateur" : "Employé";
+
+  document.querySelectorAll(".adminOnly").forEach(el => {
+    el.classList.toggle("hidden", !admin());
+  });
+
+  renderAll();
+  page("dashboard");
+
+  await loadProductsFromNeon();
 };
 function logout(){me=null;$("app").classList.add("hidden");$("login").classList.remove("hidden");$("loginPass").value=""}
 function changePassword(){
@@ -418,6 +443,46 @@ function refreshSelects(){
  ["entryProduct","exitProduct","invProduct","adjProduct"].forEach(id=>fillSelect(id,ps,"Choisir un produit"));
  fillSelect("exitClient",db.clients,"Choisir un client (facultatif)");
 }
+ async function loadProductsFromNeon() {
+  try {
+    const response = await fetch("/api/produits", {
+      method: "GET",
+      cache: "no-store"
+    });
+
+    if (!response.ok) {
+      throw new Error("Impossible de charger les produits depuis Neon.");
+    }
+
+    const produitsNeon = await response.json();
+
+    for (const p of produitsNeon) {
+      const produit = {
+        id: String(p.id),
+        code: p.reference || "",
+        name: p.nom || "",
+        unit: p.unite || "",
+        depot: p.depot || ""
+      };
+
+      const index = db.products.findIndex(
+        local => local.code.toLowerCase() === produit.code.toLowerCase()
+      );
+
+      if (index >= 0) {
+        db.products[index] = produit;
+      } else {
+        db.products.push(produit);
+      }
+    }
+
+    localStorage.setItem("deka_stock_db", JSON.stringify(db));
+    renderAll();
+  } catch (error) {
+    console.error("Erreur de chargement Neon :", error);
+    alert("Impossible de charger les produits depuis Neon. Vérifiez votre connexion.");
+  }
+}
 function renderAll(){
  refreshSelects();renderProducts();renderClients();renderDepots();renderEntries();renderExits();renderInventory();renderAdjustments();renderUsers();renderDashboard();renderHistory();
 }
@@ -425,13 +490,79 @@ function renderProducts(){
  const q=($("productSearch")?.value||"").toLowerCase();
  $("productsTable").innerHTML=db.products.filter(p=>(p.name+" "+p.code).toLowerCase().includes(q)).map(p=>`<tr><td>${esc(p.code)}</td><td>${esc(p.name)}</td><td>${esc(p.unit)}</td><td>${esc(nameDepot(p.depot))}</td><td>${admin()?`<button onclick="editProduct('${p.id}')">Modifier</button><button class="danger" onclick="delProduct('${p.id}')">Supprimer</button>`:"Consultation"}</td></tr>`).join("")||'<tr><td colspan="5">Aucun produit.</td></tr>';
 }
-$("productForm").onsubmit=e=>{
- e.preventDefault();if(!admin())return alert("Action réservée à l'administrateur.");
- const id=$("productId").value,code=$("productCode").value.trim();
- if(db.products.some(p=>p.code.toLowerCase()===code.toLowerCase()&&p.id!==id))return alert("Code produit déjà utilisé.");
- const p={id:id||uid(),code,name:$("productName").value.trim(),unit:$("productUnit").value.trim(),depot:$("productDepot").value};
- if(id)db.products=db.products.map(x=>x.id===id?p:x);else db.products.push(p);
- resetForm("productForm");save();
+$("productForm").onsubmit = async e => {
+  e.preventDefault();
+
+  if (!admin()) {
+    return alert("Action réservée à l'administrateur.");
+  }
+
+  const id = $("productId").value;
+  const code = $("productCode").value.trim();
+  const name = $("productName").value.trim();
+  const unit = $("productUnit").value.trim();
+  const depot = $("productDepot").value;
+
+  if (!code || !name) {
+    return alert("Le code et le nom du produit sont obligatoires.");
+  }
+
+  if (
+    db.products.some(
+      p =>
+        p.code.toLowerCase() === code.toLowerCase() &&
+        String(p.id) !== String(id)
+    )
+  ) {
+    return alert("Code produit déjà utilisé.");
+  }
+
+  // La modification sera connectée à l'API ensuite.
+  if (id) {
+    return alert(
+      "La modification des produits dans Neon sera activée à l'étape suivante."
+    );
+  }
+
+  try {
+    const response = await fetch("/api/produits", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        reference: code,
+        nom: name,
+        unite: unit,
+        depot: depot || null,
+        quantite_stock: 0,
+        stock_minimum: 0
+      })
+    });
+
+    const resultat = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        resultat.error || "Impossible d'enregistrer le produit."
+      );
+    }
+
+    db.products.push({
+      id: String(resultat.id),
+      code: resultat.reference || code,
+      name: resultat.nom || name,
+      unit: resultat.unite || unit,
+      depot: resultat.depot || depot
+    });
+
+    resetForm("productForm");
+    save();
+
+    alert("Produit enregistré dans la base de données Neon.");
+  } catch (error) {
+    alert("Erreur : " + error.message);
+  }
 };
 function editProduct(id){if(!admin())return;const p=db.products.find(x=>x.id===id);if(!p)return;
  $("productId").value=p.id;$("productCode").value=p.code;$("productName").value=p.name;$("productUnit").value=p.unit;$("productDepot").value=p.depot;page("products")}
